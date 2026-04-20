@@ -1,0 +1,30 @@
+{
+  "id": "scene-defaults",
+  "title": "Scene Defaults",
+  "description": "Adds the ability to configure default settings for scenes (v14 patched)",
+  "version": "3.0.0-v14patch1",
+  "authors": [
+    {
+      "name": "mxzf"
+    },
+    {
+      "name": "OpenAI patch"
+    }
+  ],
+  "esmodules": [
+    "./scene-defaults.mjs"
+  ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "compatibility": {
+    "minimum": 14,
+    "verified": 14
+  },
+  "manifest": "REPLACE_WITH_HOSTED_MODULE_JSON_URL",
+  "download": "REPLACE_WITH_HOSTED_ZIP_URL"
+}
