@@ -2,7 +2,7 @@
   "id": "scene-defaults",
   "title": "Scene Defaults",
   "description": "Adds the ability to configure default settings for scenes",
-  "version": "3.0.1-v14patch1",
+  "version": "3.0.1-v14patch2",
   "authors": [
     { "name": "snarshmallow" }
   ],
