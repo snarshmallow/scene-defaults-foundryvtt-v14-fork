@@ -16,45 +16,76 @@ Hooks.on("init", () => {
   });
 });
 
+const SCENE_DEFAULTS_STRIP_KEYS = [
+  "name",
+  "navName",
+  "thumb",
+  "background.src",
+  "foreground",
+  "foregroundElevation",
+  "width",
+  "height",
+  "padding",
+  "initial.x",
+  "initial.y",
+  "initial.scale",
+  "background.offsetX",
+  "background.offsetY",
+  "background.rotation",
+  "background.scaleX",
+  "background.scaleY",
+  "grid.size",
+  "grid.distance",
+  "grid.units"
+];
+
+function unsetPropertyPath(obj, path) {
+  const parts = path.split(".");
+  let target = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (!target || typeof target !== "object") return;
+    target = target[parts[i]];
+  }
+  if (target && typeof target === "object") delete target[parts.at(-1)];
+}
+
+function stripSceneSpecificFields(data) {
+  const clone = foundry.utils.deepClone(data ?? {});
+  for (const key of SCENE_DEFAULTS_STRIP_KEYS) unsetPropertyPath(clone, key);
+
+  // cleanup empty containers
+  for (const top of ["background", "grid", "initial"]) {
+    if (clone[top] && !Object.keys(clone[top]).length) delete clone[top];
+  }
+
+  return clone;
+}
+
 class DefaultSceneConfig extends foundry.applications.sheets.SceneConfig {
   constructor(options = {}) {
-    const SceneDocument = CONFIG.Scene.documentClass;
     const defaults = foundry.utils.deepClone(
       game.settings.get("scene-defaults", "config") ?? {}
     );
 
-    // Prefer a REAL world scene so SceneConfig has a proper collection-backed document.
     const existingScene = game.scenes?.contents?.[0];
-
-    let document;
-    let originalSource = null;
-
-    if (existingScene) {
-      document = existingScene;
-      originalSource = foundry.utils.deepClone(existingScene.toObject());
-
-      // Apply saved defaults into the live in-memory source only.
-      // This should not persist unless the sheet explicitly updates the doc.
-      const merged = foundry.utils.mergeObject(
-        foundry.utils.deepClone(originalSource),
-        defaults,
-        { inplace: false }
-      );
-      document.updateSource(merged);
-    } else {
-      // Fallback for worlds with no scenes yet: construct a Scene with collection context.
-      const source = foundry.utils.mergeObject(
-        { name: "Prototype Scene" },
-        defaults,
-        { inplace: false }
-      );
-
-      document = new SceneDocument(source, {
-        parent: null,
-        pack: null,
-        collection: game.scenes
-      });
+    if (!existingScene) {
+      ui.notifications.warn("Create at least one scene first, then reopen Scene Defaults.");
     }
+
+    const document = existingScene ?? new CONFIG.Scene.documentClass(
+      { name: "Prototype Scene" },
+      { parent: null, pack: null, collection: game.scenes }
+    );
+
+    const originalSource = foundry.utils.deepClone(document.toObject());
+
+    // Only apply NON-dimension defaults onto the borrowed scene
+    const merged = foundry.utils.mergeObject(
+      foundry.utils.deepClone(originalSource),
+      stripSceneSpecificFields(defaults),
+      { inplace: false }
+    );
+    document.updateSource(merged);
 
     super({
       ...options,
@@ -62,52 +93,83 @@ class DefaultSceneConfig extends foundry.applications.sheets.SceneConfig {
     });
 
     this._sceneDefaultsOriginalSource = originalSource;
-    this._sceneDefaultsUsingExistingScene = !!existingScene;
+  }
+
+  async _onRender(context, options) {
+    await super._onRender?.(context, options);
+
+    // visually blank inherited dimension-ish values so they don't look like defaults
+    const namesToBlank = [
+      "width",
+      "height",
+      "padding",
+      "initial.x",
+      "initial.y",
+      "initial.scale",
+      "background.offsetX",
+      "background.offsetY",
+      "background.rotation",
+      "background.scaleX",
+      "background.scaleY",
+      "grid.size",
+      "grid.distance",
+      "grid.units"
+    ];
+
+    for (const name of namesToBlank) {
+      const el = this.element?.querySelector?.(`[name="${name}"]`);
+      if (el) el.value = "";
+    }
   }
 
   async close(options = {}) {
-    // Restore the original scene source if we were borrowing a real scene.
-    if (this._sceneDefaultsUsingExistingScene && this.document && this._sceneDefaultsOriginalSource) {
+    if (this.document && this._sceneDefaultsOriginalSource) {
       this.document.updateSource(foundry.utils.deepClone(this._sceneDefaultsOriginalSource));
     }
     return super.close(options);
   }
 
   async _processSubmitData(event, form, submitData, options) {
-    // Remove fields that should not be stored as defaults if present.
-    if (submitData.environment?.darknessLock !== undefined) {
-      delete submitData.environment.darknessLock;
+    const expanded = foundry.utils.expandObject(submitData);
+
+    if (expanded.environment?.darknessLock !== undefined) {
+      delete expanded.environment.darknessLock;
     }
 
-    const SceneDocument = CONFIG.Scene.documentClass;
-    const base = new SceneDocument(
+    // Remove anything scene-instance-specific or dimension-specific
+    const cleaned = stripSceneSpecificFields(expanded);
+
+    // Diff against a blank prototype scene so only actual defaults are stored
+    const base = new CONFIG.Scene.documentClass(
       { name: "Prototype Scene" },
       { parent: null, pack: null, collection: game.scenes }
     );
 
-    const expanded = foundry.utils.expandObject(submitData);
-    const diffed = foundry.utils.diffObject(base.toObject(), expanded);
+    const diffed = foundry.utils.diffObject(base.toObject(), cleaned);
 
     await game.settings.set("scene-defaults", "config", diffed);
 
-    // Prevent accidental persistence to the borrowed live scene.
-    if (this._sceneDefaultsUsingExistingScene && this.document && this._sceneDefaultsOriginalSource) {
+    // restore borrowed scene and close without saving to it
+    if (this.document && this._sceneDefaultsOriginalSource) {
       this.document.updateSource(foundry.utils.deepClone(this._sceneDefaultsOriginalSource));
-      ui.notifications.info("Scene defaults saved.");
-      await this.close();
-      return false;
     }
 
-    return super._processSubmitData?.(event, form, submitData, options);
+    ui.notifications.info("Scene defaults saved.");
+    await this.close();
+    return false;
   }
 }
 
 Hooks.on("preCreateScene", (doc, data) => {
-  const defaults = game.settings.get("scene-defaults", "config") ?? {};
+  const defaults = stripSceneSpecificFields(
+    game.settings.get("scene-defaults", "config") ?? {}
+  );
+
   const merged = foundry.utils.mergeObject(
     foundry.utils.deepClone(defaults),
     data,
     { inplace: false }
   );
+
   doc.updateSource(merged);
 });
