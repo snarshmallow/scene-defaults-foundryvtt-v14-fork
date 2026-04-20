@@ -1,15 +1,10 @@
 {
   "id": "scene-defaults",
   "title": "Scene Defaults",
-  "description": "Adds the ability to configure default settings for scenes (v14 patched)",
-  "version": "3.0.0-v14patch1",
+  "description": "Adds the ability to configure default settings for scenes",
+  "version": "3.0.1-v14patch1",
   "authors": [
-    {
-      "name": "mxzf"
-    },
-    {
-      "name": "OpenAI patch"
-    }
+    { "name": "snarshmallow" }
   ],
   "esmodules": [
     "./scene-defaults.mjs"
@@ -25,6 +20,6 @@
     "minimum": 14,
     "verified": 14
   },
-  "manifest": "REPLACE_WITH_HOSTED_MODULE_JSON_URL",
-  "download": "REPLACE_WITH_HOSTED_ZIP_URL"
+  "manifest": "https://raw.githubusercontent.com/snarshmallow/scene-defaults-foundryvtt-v14-fork/main/module.json",
+  "download": "https://codeload.github.com/snarshmallow/scene-defaults-foundryvtt-v14-fork/zip/refs/heads/main"
 }
